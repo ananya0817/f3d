@@ -557,6 +557,9 @@ public:
   std::multimap<std::string, interaction_bind_t> GroupedBinds;
   std::vector<std::string> OrderedBindGroups;
 
+  // initialize map that will store action and value
+  std::map<std::string, std::string> AliasMap;
+
   vtkNew<vtkCellPicker> CellPicker;
   vtkNew<vtkPointPicker> PointPicker;
 
@@ -778,6 +781,37 @@ interactor& interactor_impl::initCommands()
       this->Internals->AnimationManager->StopAnimation();
       this->Internals->Scene.add(files);
     });
+
+  this->addCommand("alias",
+    [&](const std::vector<std::string>& args)
+    {
+      if (args.size() < 2)
+      {
+        throw interactor_impl::invalid_args_exception(
+          "The alias command requires at least 2 arguments. Try again.");
+      }
+
+      // retrieve alias name
+      const std::string& aliasName = args[0];
+
+      // add strings to the alias command
+      std::string aliasCommand = "";
+      for (size_t i = 1; i < args.size(); i++)
+      {
+        aliasCommand += args[i];
+        if (i != args.size() - 1)
+        {
+          aliasCommand += " ";
+        }
+      }
+
+      // save alias in alias map
+      this->Internals->AliasMap[aliasName] = aliasCommand;
+
+      // log the alias made with the command
+      log::info("Alias '{}' added with command '{}'", aliasName, aliasCommand);
+    });
+
   return *this;
 }
 
@@ -817,6 +851,28 @@ std::vector<std::string> interactor_impl::getCommandActions() const
 bool interactor_impl::triggerCommand(std::string_view command)
 {
   log::debug("Command: ", command);
+
+  // check if command exists in alias map
+  bool found = false;
+  std::string aliasValue = "";
+
+  for (auto iter = this->Internals->AliasMap.begin(); iter != this->Internals->AliasMap.end(); ++iter)
+  {
+    if (iter->first == command)
+    {
+      found = true;
+      aliasValue = iter->second;
+      break;
+    }
+  }
+
+  // update command if it exists in map
+  if (found)
+  {
+    command = aliasValue;
+  }
+
+
   std::vector<std::string> tokens;
   try
   {
